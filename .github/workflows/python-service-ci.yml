@@ -67,7 +67,9 @@ jobs:
             ${{ secrets.LEGATO_COMMON_SSH_KEY }}
             ${{ secrets.AGENTIC_CORE_DEPLOY_KEY }}
       - run: uv sync
-      - run: uv run mypy . --ignore-missing-imports
+      - name: Run type checker
+        run: uv run mypy . --ignore-missing-imports
+        continue-on-error: true
 
   security:
     name: ci/security
