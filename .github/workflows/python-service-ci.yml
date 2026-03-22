@@ -10,8 +10,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v4
+      - uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: |
+            ${{ secrets.LEGATO_COMMON_SSH_KEY }}
+            ${{ secrets.AGENTIC_CORE_DEPLOY_KEY }}
       - run: uv sync
-      - run: uv run ruff check . || echo "ruff not configured, skipping"
+      - run: uv run ruff check .
 
   test:
     name: ci/test
@@ -19,6 +24,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v4
+      - uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: |
+            ${{ secrets.LEGATO_COMMON_SSH_KEY }}
+            ${{ secrets.AGENTIC_CORE_DEPLOY_KEY }}
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
       - run: uv sync
       - name: Run tests
         run: |
@@ -37,8 +52,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v4
+      - uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: |
+            ${{ secrets.LEGATO_COMMON_SSH_KEY }}
+            ${{ secrets.AGENTIC_CORE_DEPLOY_KEY }}
       - run: uv sync
-      - run: uv run mypy . --ignore-missing-imports || echo "mypy not configured, skipping"
+      - run: uv run mypy . --ignore-missing-imports
 
   security:
     name: ci/security
