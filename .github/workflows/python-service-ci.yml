@@ -7,10 +7,14 @@ jobs:
   lint:
     name: ci/lint
     runs-on: ubuntu-latest
+    env:
+      SSH_KEY: ${{ secrets.LEGATO_COMMON_SSH_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v4
-      - uses: webfactory/ssh-agent@v0.9.0
+      - name: Set up SSH keys for private deps
+        if: env.SSH_KEY != ''
+        uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: |
             ${{ secrets.LEGATO_COMMON_SSH_KEY }}
@@ -21,15 +25,22 @@ jobs:
   test:
     name: ci/test
     runs-on: ubuntu-latest
+    env:
+      SSH_KEY: ${{ secrets.LEGATO_COMMON_SSH_KEY }}
+      AWS_KEY: ${{ secrets.AWS_ACCESS_KEY_ID }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v4
-      - uses: webfactory/ssh-agent@v0.9.0
+      - name: Set up SSH keys for private deps
+        if: env.SSH_KEY != ''
+        uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: |
             ${{ secrets.LEGATO_COMMON_SSH_KEY }}
             ${{ secrets.AGENTIC_CORE_DEPLOY_KEY }}
-      - uses: aws-actions/configure-aws-credentials@v4
+      - name: Configure AWS credentials
+        if: env.AWS_KEY != ''
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -49,10 +60,14 @@ jobs:
   typecheck:
     name: ci/typecheck
     runs-on: ubuntu-latest
+    env:
+      SSH_KEY: ${{ secrets.LEGATO_COMMON_SSH_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v4
-      - uses: webfactory/ssh-agent@v0.9.0
+      - name: Set up SSH keys for private deps
+        if: env.SSH_KEY != ''
+        uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: |
             ${{ secrets.LEGATO_COMMON_SSH_KEY }}
