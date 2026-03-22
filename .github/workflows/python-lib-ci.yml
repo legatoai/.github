@@ -16,7 +16,7 @@ on:
 
 jobs:
   lint:
-    name: ci/lint
+    name: lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,7 +34,7 @@ jobs:
       - run: uv run ruff check .
 
   test:
-    name: ci/test
+    name: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -61,7 +61,7 @@ jobs:
           exit $status
 
   typecheck:
-    name: ci/typecheck
+    name: typecheck
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -79,7 +79,7 @@ jobs:
       - run: uv run mypy . --ignore-missing-imports
 
   security:
-    name: ci/security
+    name: security
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -91,7 +91,7 @@ jobs:
           exit-code: "0"
 
   review:
-    name: ci/review
+    name: review
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
