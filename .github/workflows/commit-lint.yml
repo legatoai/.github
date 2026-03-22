@@ -1,0 +1,35 @@
+name: Commit Lint
+
+on:
+  workflow_call:
+
+jobs:
+  commit-lint:
+    name: commit-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate PR title follows Conventional Commits
+        if: github.event_name == 'pull_request'
+        run: |
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PATTERN="^(feat|fix|chore|docs|refactor|test|ci|hotfix)(\(.+\))?: .+"
+          if [[ ! "$PR_TITLE" =~ $PATTERN ]]; then
+            echo "::error::PR title does not follow Conventional Commits format."
+            echo ""
+            echo "Expected: type(scope): description"
+            echo "  Types: feat, fix, chore, docs, refactor, test, ci, hotfix"
+            echo "  Scope: optional, in parentheses"
+            echo ""
+            echo "Examples:"
+            echo "  feat: add user authentication"
+            echo "  fix(api): handle null response"
+            echo "  chore: update dependencies"
+            echo ""
+            echo "Got: $PR_TITLE"
+            exit 1
+          fi
+          echo "PR title follows Conventional Commits: $PR_TITLE"
