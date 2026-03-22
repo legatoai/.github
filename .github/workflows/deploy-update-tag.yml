@@ -120,47 +120,19 @@ jobs:
           owner: legatoai
           repositories: helm-charts
 
-      - name: Update image tag via Contents API
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ steps.app-token.outputs.token }}
-          script: |
-            const owner = 'legatoai';
-            const repo = 'helm-charts';
-            const chartName = '${{ inputs.chart-name }}';
-            const newTag = '${{ github.sha }}';
-            const path = `charts/${chartName}/values.yaml`;
+      - name: Clone helm-charts and update image tag
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          git clone https://x-access-token:${GH_TOKEN}@github.com/legatoai/helm-charts.git
+          cd helm-charts
+          git config user.name "legato-deploy-bot[bot]"
+          git config user.email "legato-deploy-bot[bot]@users.noreply.github.com"
 
-            // Get current file
-            const { data: file } = await github.rest.repos.getContent({
-              owner, repo, path, ref: 'main',
-            });
-
-            // Decode content
-            const content = Buffer.from(file.content, 'base64').toString('utf8');
-
-            // Update image tag (within the image: block)
-            const updated = content.replace(
-              /(image:\s*\n(?:\s+\w+:.*\n)*?\s+tag:\s*)(?:&\w+\s+)?["']?[^"'\n]+["']?/,
-              `$1"${newTag}"`
-            );
-
-            if (content === updated) {
-              console.log(`No tag change needed in ${path}`);
-              return;
-            }
-
-            // Commit via Contents API (atomic, no race condition)
-            await github.rest.repos.createOrUpdateFileContents({
-              owner, repo, path,
-              message: `Update ${chartName} image tag to ${newTag}`,
-              content: Buffer.from(updated).toString('base64'),
-              sha: file.sha,
-              branch: 'main',
-              committer: {
-                name: 'legato-deploy-bot',
-                email: 'legato-deploy-bot[bot]@users.noreply.github.com',
-              },
-            });
-
-            console.log(`Updated ${path} with tag ${newTag}`);
+          CHART_DIR="charts/${{ inputs.chart-name }}"
+          if [ -d "$CHART_DIR" ]; then
+            sed -i -E '/^image:/,/^[a-zA-Z]/ s/(^[[:space:]]+tag:[[:space:]]*)(&[a-zA-Z0-9_-]+[[:space:]]+)?(.*)$/\1\2"${{ github.sha }}"/' "$CHART_DIR/values.yaml"
+            git add "$CHART_DIR/values.yaml"
+            git commit -m "Update ${{ inputs.chart-name }} image tag to ${{ github.sha }}" || true
+            git push origin main
+          fi
