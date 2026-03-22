@@ -1,0 +1,39 @@
+name: Test App Bypass
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate deploy bot token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.DEPLOY_BOT_APP_ID }}
+          private-key: ${{ secrets.DEPLOY_BOT_PRIVATE_KEY }}
+          owner: legatoai
+          repositories: helm-charts
+
+      - name: Test push to helm-charts
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          git clone https://x-access-token:${GH_TOKEN}@github.com/legatoai/helm-charts.git
+          cd helm-charts
+          git config user.name "legato-deploy-bot[bot]"
+          git config user.email "legato-deploy-bot[bot]@users.noreply.github.com"
+          echo "# bypass test $(date)" >> README.md
+          git add README.md
+          git commit -m "test: verify App bypass on org ruleset"
+          git push origin main
+          echo "SUCCESS: App bypass works!"
+
+      - name: Revert test commit
+        if: success()
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          cd helm-charts
+          git revert HEAD --no-edit
+          git push origin main
