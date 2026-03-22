@@ -2,6 +2,15 @@ name: Python Service CI
 
 on:
   workflow_call:
+    secrets:
+      LEGATO_COMMON_SSH_KEY:
+        required: false
+      AGENTIC_CORE_DEPLOY_KEY:
+        required: false
+      AWS_ACCESS_KEY_ID:
+        required: false
+      AWS_SECRET_ACCESS_KEY:
+        required: false
 
 jobs:
   lint:
