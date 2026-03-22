@@ -1,0 +1,98 @@
+name: Python Library CI
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        description: "Python version to use"
+        required: false
+        default: "3.13"
+        type: string
+    secrets:
+      LEGATO_COMMON_SSH_KEY:
+        required: false
+      AGENTIC_CORE_DEPLOY_KEY:
+        required: false
+
+jobs:
+  lint:
+    name: ci/lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - name: Set up SSH keys
+        if: env.HAS_SSH_KEYS == 'true'
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: |
+            ${{ secrets.LEGATO_COMMON_SSH_KEY }}
+            ${{ secrets.AGENTIC_CORE_DEPLOY_KEY }}
+        env:
+          HAS_SSH_KEYS: ${{ secrets.LEGATO_COMMON_SSH_KEY != '' }}
+      - run: uv sync
+      - run: uv run ruff check .
+
+  test:
+    name: ci/test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - name: Set up SSH keys
+        if: env.HAS_SSH_KEYS == 'true'
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: |
+            ${{ secrets.LEGATO_COMMON_SSH_KEY }}
+            ${{ secrets.AGENTIC_CORE_DEPLOY_KEY }}
+        env:
+          HAS_SSH_KEYS: ${{ secrets.LEGATO_COMMON_SSH_KEY != '' }}
+      - run: uv sync
+      - name: Run tests
+        run: |
+          set +e
+          uv run pytest --maxfail=1 --disable-warnings
+          status=$?
+          if [ $status -eq 5 ]; then
+            echo "No tests collected. Skipping."
+            exit 0
+          fi
+          exit $status
+
+  typecheck:
+    name: ci/typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - name: Set up SSH keys
+        if: env.HAS_SSH_KEYS == 'true'
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: |
+            ${{ secrets.LEGATO_COMMON_SSH_KEY }}
+            ${{ secrets.AGENTIC_CORE_DEPLOY_KEY }}
+        env:
+          HAS_SSH_KEYS: ${{ secrets.LEGATO_COMMON_SSH_KEY != '' }}
+      - run: uv sync
+      - run: uv run mypy . --ignore-missing-imports
+
+  security:
+    name: ci/security
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: "fs"
+          scan-ref: "."
+          severity: "CRITICAL,HIGH"
+          exit-code: "0"
+
+  review:
+    name: ci/review
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "AI review step — configure Claude Code review action here"

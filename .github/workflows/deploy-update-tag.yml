@@ -1,0 +1,150 @@
+name: Deploy — Build, Push & Update Tag
+
+on:
+  workflow_call:
+    inputs:
+      chart-name:
+        description: "Helm chart name in helm-charts repo"
+        required: true
+        type: string
+      ecr-repository:
+        description: "ECR repository path (e.g. legatoai/code-agency)"
+        required: true
+        type: string
+      dockerfile-target:
+        description: "Docker build target stage"
+        required: false
+        default: "production"
+        type: string
+      platform:
+        description: "Docker build platform"
+        required: false
+        default: "linux/arm64"
+        type: string
+      extra-images:
+        description: "JSON array of extra images to build [{target, ecr_repository}]"
+        required: false
+        default: "[]"
+        type: string
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      LEGATO_COMMON_SSH_KEY:
+        required: false
+      AGENTIC_CORE_DEPLOY_KEY:
+        required: false
+      CHART_REPO_SSH_KEY:
+        required: true
+
+env:
+  ECR_REGISTRY: 977522846639.dkr.ecr.us-east-1.amazonaws.com
+
+jobs:
+  build-and-push:
+    name: cd/build-push
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      image-tag: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Log in to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Write SSH keys
+        run: |
+          mkdir -p /tmp/secrets
+          if [ -n "${{ secrets.LEGATO_COMMON_SSH_KEY }}" ]; then
+            printf '%s\n' "${{ secrets.LEGATO_COMMON_SSH_KEY }}" > /tmp/secrets/legato_common_key
+            chmod 600 /tmp/secrets/legato_common_key
+          fi
+          if [ -n "${{ secrets.AGENTIC_CORE_DEPLOY_KEY }}" ]; then
+            printf '%s\n' "${{ secrets.AGENTIC_CORE_DEPLOY_KEY }}" > /tmp/secrets/agentic_core_key
+            chmod 600 /tmp/secrets/agentic_core_key
+          fi
+
+      - name: Build and push primary image
+        run: |
+          SECRETS_ARGS=""
+          [ -f /tmp/secrets/legato_common_key ] && SECRETS_ARGS="$SECRETS_ARGS --secret id=legato_common_key,src=/tmp/secrets/legato_common_key"
+          [ -f /tmp/secrets/agentic_core_key ] && SECRETS_ARGS="$SECRETS_ARGS --secret id=agentic_core_key,src=/tmp/secrets/agentic_core_key"
+
+          docker buildx build \
+            --target ${{ inputs.dockerfile-target }} \
+            --build-arg GITHUB_SHA=${{ github.sha }} \
+            -t $ECR_REGISTRY/${{ inputs.ecr-repository }}:${{ github.sha }} \
+            -t $ECR_REGISTRY/${{ inputs.ecr-repository }}:latest \
+            $SECRETS_ARGS \
+            --push \
+            --platform ${{ inputs.platform }} \
+            .
+
+      - name: Build and push extra images
+        if: inputs.extra-images != '[]'
+        run: |
+          SECRETS_ARGS=""
+          [ -f /tmp/secrets/legato_common_key ] && SECRETS_ARGS="$SECRETS_ARGS --secret id=legato_common_key,src=/tmp/secrets/legato_common_key"
+          [ -f /tmp/secrets/agentic_core_key ] && SECRETS_ARGS="$SECRETS_ARGS --secret id=agentic_core_key,src=/tmp/secrets/agentic_core_key"
+
+          echo '${{ inputs.extra-images }}' | jq -c '.[]' | while read -r item; do
+            TARGET=$(echo "$item" | jq -r '.target')
+            REPO=$(echo "$item" | jq -r '.ecr_repository')
+            docker buildx build \
+              --target "$TARGET" \
+              --build-arg GITHUB_SHA=${{ github.sha }} \
+              -t "$ECR_REGISTRY/$REPO:${{ github.sha }}" \
+              -t "$ECR_REGISTRY/$REPO:latest" \
+              $SECRETS_ARGS \
+              --push \
+              --platform ${{ inputs.platform }} \
+              .
+          done
+
+      - name: Cleanup secrets
+        if: always()
+        run: rm -rf /tmp/secrets
+
+  update-helm-tag:
+    name: cd/update-tag
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    steps:
+      - name: Clone helm-charts and update tag
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.CHART_REPO_SSH_KEY }}" > ~/.ssh/id_chart
+          chmod 600 ~/.ssh/id_chart
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+          GIT_SSH_COMMAND='ssh -i ~/.ssh/id_chart -o IdentitiesOnly=yes' \
+            git clone git@github.com:legatoai/helm-charts.git
+
+          cd helm-charts
+          git config user.name "GitHub Actions"
+          git config user.email "github-actions@legato-ai.com"
+
+          CHART_DIR="charts/${{ inputs.chart-name }}"
+          if [ -d "$CHART_DIR" ]; then
+            sed -i -E '/^image:/,/^[a-zA-Z]/ s/(^[[:space:]]+tag:[[:space:]]*)(&[a-zA-Z0-9_-]+[[:space:]]+)?(.*)$/\1\2"${{ github.sha }}"/' "$CHART_DIR/values.yaml"
+            git add "$CHART_DIR/values.yaml"
+            git commit -m "Update ${{ inputs.chart-name }} image tag to ${{ github.sha }}" || true
+            GIT_SSH_COMMAND='ssh -i ~/.ssh/id_chart -o IdentitiesOnly=yes' git push origin main
+          fi

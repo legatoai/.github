@@ -1,0 +1,30 @@
+name: Infrastructure CI
+
+on:
+  workflow_call:
+
+jobs:
+  lint:
+    name: ci/lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - run: uv sync
+      - run: uv run ruff check .
+
+  typecheck:
+    name: ci/typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - run: uv sync
+      - run: uv run mypy . --ignore-missing-imports
+
+  review:
+    name: ci/review
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "AI review step — configure Claude Code review action here"

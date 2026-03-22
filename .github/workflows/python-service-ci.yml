@@ -1,0 +1,141 @@
+name: Python Service CI
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        description: "Python version to use"
+        required: false
+        default: "3.13"
+        type: string
+      pytest-markers:
+        description: "Pytest marker expression (e.g. 'not integration')"
+        required: false
+        default: "not integration"
+        type: string
+    secrets:
+      LEGATO_COMMON_SSH_KEY:
+        required: false
+      AGENTIC_CORE_DEPLOY_KEY:
+        required: false
+      AWS_ACCESS_KEY_ID:
+        required: false
+      AWS_SECRET_ACCESS_KEY:
+        required: false
+
+jobs:
+  lint:
+    name: ci/lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Set up SSH keys
+        if: env.HAS_SSH_KEYS == 'true'
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: |
+            ${{ secrets.LEGATO_COMMON_SSH_KEY }}
+            ${{ secrets.AGENTIC_CORE_DEPLOY_KEY }}
+        env:
+          HAS_SSH_KEYS: ${{ secrets.LEGATO_COMMON_SSH_KEY != '' }}
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run linter
+        run: uv run ruff check .
+
+  test:
+    name: ci/test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Set up SSH keys
+        if: env.HAS_SSH_KEYS == 'true'
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: |
+            ${{ secrets.LEGATO_COMMON_SSH_KEY }}
+            ${{ secrets.AGENTIC_CORE_DEPLOY_KEY }}
+        env:
+          HAS_SSH_KEYS: ${{ secrets.LEGATO_COMMON_SSH_KEY != '' }}
+
+      - name: Configure AWS credentials
+        if: env.HAS_AWS == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+        env:
+          HAS_AWS: ${{ secrets.AWS_ACCESS_KEY_ID != '' }}
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run tests
+        run: |
+          set +e
+          uv run pytest -m "${{ inputs.pytest-markers }}" --maxfail=1 --disable-warnings
+          status=$?
+          if [ $status -eq 5 ]; then
+            echo "No tests were collected (exit code 5). Skipping."
+            exit 0
+          fi
+          exit $status
+
+  typecheck:
+    name: ci/typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Set up SSH keys
+        if: env.HAS_SSH_KEYS == 'true'
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: |
+            ${{ secrets.LEGATO_COMMON_SSH_KEY }}
+            ${{ secrets.AGENTIC_CORE_DEPLOY_KEY }}
+        env:
+          HAS_SSH_KEYS: ${{ secrets.LEGATO_COMMON_SSH_KEY != '' }}
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run type checker
+        run: uv run mypy . --ignore-missing-imports
+
+  security:
+    name: ci/security
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: "fs"
+          scan-ref: "."
+          severity: "CRITICAL,HIGH"
+          exit-code: "0"
+
+  review:
+    name: ci/review
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: AI review placeholder
+        run: echo "AI review step — configure Claude Code review action here"
