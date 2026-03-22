@@ -2,15 +2,6 @@ name: Python Service CI
 
 on:
   workflow_call:
-    secrets:
-      LEGATO_COMMON_SSH_KEY:
-        required: false
-      AGENTIC_CORE_DEPLOY_KEY:
-        required: false
-      AWS_ACCESS_KEY_ID:
-        required: false
-      AWS_SECRET_ACCESS_KEY:
-        required: false
 
 jobs:
   lint:
@@ -28,20 +19,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v4
-      - name: Set up SSH keys
-        if: ${{ secrets.LEGATO_COMMON_SSH_KEY != '' }}
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: |
-            ${{ secrets.LEGATO_COMMON_SSH_KEY }}
-            ${{ secrets.AGENTIC_CORE_DEPLOY_KEY }}
-      - name: Configure AWS credentials
-        if: ${{ secrets.AWS_ACCESS_KEY_ID != '' }}
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
       - run: uv sync
       - name: Run tests
         run: |
