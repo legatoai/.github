@@ -38,12 +38,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v4
       - uses: webfactory/ssh-agent@v0.9.0
+        if: github.actor != 'dependabot[bot]'
         with:
           ssh-private-key: |
             ${{ secrets.LEGATO_COMMON_SSH_KEY }}
             ${{ secrets.AGENTIC_CORE_DEPLOY_KEY }}
             ${{ secrets.AGENT_FRAMEWORK_DEPLOY_KEY }}
       - run: uv sync ${{ inputs.uv-sync-args }}
+        continue-on-error: ${{ github.actor == 'dependabot[bot]' }}
       - name: Run type checker
         run: uv run mypy . --ignore-missing-imports
         continue-on-error: true
@@ -76,12 +78,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v4
       - uses: webfactory/ssh-agent@v0.9.0
+        if: github.actor != 'dependabot[bot]'
         with:
           ssh-private-key: |
             ${{ secrets.LEGATO_COMMON_SSH_KEY }}
             ${{ secrets.AGENTIC_CORE_DEPLOY_KEY }}
             ${{ secrets.AGENT_FRAMEWORK_DEPLOY_KEY }}
       - run: uv sync ${{ inputs.uv-sync-args }}
+        continue-on-error: ${{ github.actor == 'dependabot[bot]' }}
       - name: Run tests
         run: |
           set +e
