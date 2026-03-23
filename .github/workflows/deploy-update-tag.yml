@@ -12,9 +12,9 @@ on:
         required: true
         type: string
       dockerfile-target:
-        description: "Docker build target stage"
+        description: "Docker build target stage (empty = no target)"
         required: false
-        default: "production"
+        default: ""
         type: string
       platform:
         description: "Docker build platform"
@@ -37,7 +37,7 @@ env:
 
 jobs:
   build-and-push:
-    name: cd/build-push
+    name: build-push
     runs-on: ${{ inputs.runner }}
     outputs:
       image-tag: ${{ github.sha }}
@@ -86,7 +86,7 @@ jobs:
         with:
           context: .
           push: true
-          target: ${{ inputs.dockerfile-target }}
+          target: ${{ inputs.dockerfile-target || '' }}
           platforms: ${{ inputs.platform }}
           build-args: GITHUB_SHA=${{ github.sha }}
           tags: |
@@ -125,7 +125,7 @@ jobs:
         run: rm -rf /tmp/secrets
 
   update-helm-tag:
-    name: cd/update-tag
+    name: update-tag
     runs-on: ubuntu-latest
     needs: build-and-push
     steps:
