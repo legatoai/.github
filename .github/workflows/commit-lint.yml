@@ -13,24 +13,26 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Validate PR title follows Conventional Commits
+      - name: Validate PR title format
         if: github.event_name == 'pull_request'
         run: |
           PR_TITLE="${{ github.event.pull_request.title }}"
-          PATTERN="^(feat|fix|chore|docs|refactor|test|ci|hotfix|style)(\(.+\))?: .+"
+          PATTERN="^\[TASK-[0-9]+\] (feat|fix|chore|docs|refactor|test|ci|hotfix|style)(\(.+\))?\!?: .+"
           if [[ ! "$PR_TITLE" =~ $PATTERN ]]; then
-            echo "::error::PR title does not follow Conventional Commits format."
+            echo "::error::PR title does not follow the required format."
             echo ""
-            echo "Expected: type(scope): description"
-            echo "  Types: feat, fix, chore, docs, refactor, test, ci, hotfix"
+            echo "Expected: [TASK-XX] type(scope): description"
+            echo "  Prefix: [TASK-123] (required — links to Notion task)"
+            echo "  Types: feat, fix, chore, docs, refactor, test, ci, hotfix, style"
             echo "  Scope: optional, in parentheses"
+            echo "  Breaking: add ! before colon (e.g., feat!:)"
             echo ""
             echo "Examples:"
-            echo "  feat: add user authentication"
-            echo "  fix(api): handle null response"
-            echo "  chore: update dependencies"
+            echo "  [TASK-123] feat: add user authentication"
+            echo "  [TASK-456] fix(api): handle null response"
+            echo "  [TASK-789] feat!: redesign auth flow"
             echo ""
             echo "Got: $PR_TITLE"
             exit 1
           fi
-          echo "PR title follows Conventional Commits: $PR_TITLE"
+          echo "PR title is valid: $PR_TITLE"

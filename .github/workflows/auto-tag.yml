@@ -23,10 +23,12 @@ jobs:
           MINOR=$(echo "$LATEST" | sed 's/^v//' | cut -d. -f2)
           PATCH=$(echo "$LATEST" | sed 's/^v//' | cut -d. -f3)
 
-          # Read commit message (squash merge = PR title)
-          MSG=$(git log -1 --pretty=%s)
+          # Read commit message (squash merge = PR title), strip [TASK-XX] prefix
+          RAW_MSG=$(git log -1 --pretty=%s)
+          MSG=$(echo "$RAW_MSG" | sed 's/^\[TASK-[0-9]*\] //')
           echo "Latest tag: $LATEST"
-          echo "Commit: $MSG"
+          echo "Commit: $RAW_MSG"
+          echo "Parsed: $MSG"
 
           # Determine bump
           if [[ "$MSG" =~ ^[a-z]+\!: ]]; then
