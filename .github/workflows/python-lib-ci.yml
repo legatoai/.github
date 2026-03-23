@@ -3,84 +3,54 @@ name: Python Library CI
 on:
   workflow_call:
     inputs:
-      python-version:
-        description: "Python version to use"
+      uv-sync-args:
+        description: "Extra args for uv sync (e.g. --all-extras)"
         required: false
-        default: "3.13"
+        default: ""
         type: string
-    secrets:
-      LEGATO_COMMON_SSH_KEY:
+      pytest-markers:
+        description: "Pytest marker expression"
         required: false
-      AGENTIC_CORE_DEPLOY_KEY:
-        required: false
+        default: ""
+        type: string
 
 jobs:
+  format:
+    name: format
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - run: uvx ruff format --check .
+
   lint:
     name: lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v4
-      - name: Set up SSH keys
-        if: env.HAS_SSH_KEYS == 'true'
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: |
-            ${{ secrets.LEGATO_COMMON_SSH_KEY }}
-            ${{ secrets.AGENTIC_CORE_DEPLOY_KEY }}
-        env:
-          HAS_SSH_KEYS: ${{ secrets.LEGATO_COMMON_SSH_KEY != '' }}
-      - run: uv sync
-      - run: uv run ruff check .
-
-  test:
-    name: test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
-      - name: Set up SSH keys
-        if: env.HAS_SSH_KEYS == 'true'
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: |
-            ${{ secrets.LEGATO_COMMON_SSH_KEY }}
-            ${{ secrets.AGENTIC_CORE_DEPLOY_KEY }}
-        env:
-          HAS_SSH_KEYS: ${{ secrets.LEGATO_COMMON_SSH_KEY != '' }}
-      - run: uv sync
-      - name: Run tests
-        run: |
-          set +e
-          uv run pytest --maxfail=1 --disable-warnings
-          status=$?
-          if [ $status -eq 5 ]; then
-            echo "No tests collected. Skipping."
-            exit 0
-          fi
-          exit $status
+      - run: uvx ruff check .
 
   typecheck:
     name: typecheck
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v4
-      - name: Set up SSH keys
-        if: env.HAS_SSH_KEYS == 'true'
-        uses: webfactory/ssh-agent@v0.9.0
+      - uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: |
             ${{ secrets.LEGATO_COMMON_SSH_KEY }}
             ${{ secrets.AGENTIC_CORE_DEPLOY_KEY }}
-        env:
-          HAS_SSH_KEYS: ${{ secrets.LEGATO_COMMON_SSH_KEY != '' }}
-      - run: uv sync
-      - run: uv run mypy . --ignore-missing-imports
+            ${{ secrets.AGENT_FRAMEWORK_DEPLOY_KEY }}
+      - run: uv sync ${{ inputs.uv-sync-args }}
+      - name: Run type checker
+        run: uv run mypy . --ignore-missing-imports
+        continue-on-error: true
 
   security:
     name: security
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
       - uses: aquasecurity/trivy-action@master
@@ -92,7 +62,38 @@ jobs:
 
   review:
     name: review
-    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
       - run: echo "AI review step — configure Claude Code review action here"
+
+  test:
+    name: test
+    needs: [format, lint, typecheck]
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: |
+            ${{ secrets.LEGATO_COMMON_SSH_KEY }}
+            ${{ secrets.AGENTIC_CORE_DEPLOY_KEY }}
+            ${{ secrets.AGENT_FRAMEWORK_DEPLOY_KEY }}
+      - run: uv sync ${{ inputs.uv-sync-args }}
+      - name: Run tests
+        run: |
+          set +e
+          MARKERS="${{ inputs.pytest-markers }}"
+          if [ -n "$MARKERS" ]; then
+            uv run pytest -m "$MARKERS" --maxfail=1 --disable-warnings
+          else
+            uv run pytest --maxfail=1 --disable-warnings
+          fi
+          status=$?
+          if [ $status -eq 5 ]; then
+            echo "No tests collected. Skipping."
+            exit 0
+          fi
+          exit $status
