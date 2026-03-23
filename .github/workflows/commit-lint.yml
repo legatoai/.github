@@ -7,14 +7,13 @@ jobs:
   commit-lint:
     name: commit-lint
     runs-on: ubuntu-24.04-arm
-    if: github.actor != 'dependabot[bot]'
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Validate PR title format
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
         run: |
           PR_TITLE="${{ github.event.pull_request.title }}"
           PATTERN="^\[TASK-[0-9]+\] (feat|fix|chore|docs|refactor|test|ci|hotfix|style)(\(.+\))?\!?: .+"
