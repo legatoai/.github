@@ -7,7 +7,7 @@ jobs:
   ticket-check:
     name: ticket-check
     runs-on: ubuntu-24.04-arm
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
     steps:
       - name: Check for Notion ticket link in PR body
         env:
