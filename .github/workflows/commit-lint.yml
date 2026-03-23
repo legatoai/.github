@@ -16,7 +16,7 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           PR_TITLE="${{ github.event.pull_request.title }}"
-          PATTERN="^(feat|fix|chore|docs|refactor|test|ci|hotfix)(\(.+\))?: .+"
+          PATTERN="^(feat|fix|chore|docs|refactor|test|ci|hotfix|style)(\(.+\))?: .+"
           if [[ ! "$PR_TITLE" =~ $PATTERN ]]; then
             echo "::error::PR title does not follow Conventional Commits format."
             echo ""
