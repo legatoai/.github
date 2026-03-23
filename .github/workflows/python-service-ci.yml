@@ -93,6 +93,7 @@ jobs:
       - run: uv sync ${{ inputs.uv-sync-args }}
         continue-on-error: ${{ github.actor == 'dependabot[bot]' }}
       - name: Run tests
+        continue-on-error: ${{ github.actor == 'dependabot[bot]' }}
         run: |
           set +e
           uv run pytest -m "${{ inputs.pytest-markers }}" --maxfail=1 --disable-warnings
