@@ -21,7 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v4
-      - run: uv run ruff format --check .
+      - run: uvx ruff format --check .
 
   lint:
     name: lint
