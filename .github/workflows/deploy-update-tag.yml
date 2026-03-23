@@ -21,6 +21,11 @@ on:
         required: false
         default: "linux/arm64"
         type: string
+      runner:
+        description: "GitHub Actions runner label"
+        required: false
+        default: "ubuntu-24.04-arm"
+        type: string
       extra-images:
         description: "JSON array of extra images to build [{target, ecr_repository}]"
         required: false
@@ -33,7 +38,7 @@ env:
 jobs:
   build-and-push:
     name: cd/build-push
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     outputs:
       image-tag: ${{ github.sha }}
     steps:
@@ -47,7 +52,6 @@ jobs:
 
       - uses: aws-actions/amazon-ecr-login@v2
 
-      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
 
       - name: Write SSH keys
@@ -67,43 +71,44 @@ jobs:
           fi
 
       - name: Build and push primary image
-        run: |
-          SECRETS_ARGS=""
-          [ -f /tmp/secrets/legato_common_key ] && SECRETS_ARGS="$SECRETS_ARGS --secret id=legato_common_key,src=/tmp/secrets/legato_common_key"
-          [ -f /tmp/secrets/agentic_core_key ] && SECRETS_ARGS="$SECRETS_ARGS --secret id=agentic_core_key,src=/tmp/secrets/agentic_core_key"
-          [ -f /tmp/secrets/agent_framework_key ] && SECRETS_ARGS="$SECRETS_ARGS --secret id=agent_framework_key,src=/tmp/secrets/agent_framework_key"
-
-          docker buildx build \
-            --target ${{ inputs.dockerfile-target }} \
-            --build-arg GITHUB_SHA=${{ github.sha }} \
-            -t $ECR_REGISTRY/${{ inputs.ecr-repository }}:${{ github.sha }} \
-            -t $ECR_REGISTRY/${{ inputs.ecr-repository }}:latest \
-            $SECRETS_ARGS \
-            --push \
-            --platform ${{ inputs.platform }} \
-            .
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          target: ${{ inputs.dockerfile-target }}
+          platforms: ${{ inputs.platform }}
+          build-args: GITHUB_SHA=${{ github.sha }}
+          tags: |
+            ${{ env.ECR_REGISTRY }}/${{ inputs.ecr-repository }}:${{ github.sha }}
+            ${{ env.ECR_REGISTRY }}/${{ inputs.ecr-repository }}:latest
+          secret-files: |
+            legato_common_key=/tmp/secrets/legato_common_key
+            agentic_core_key=/tmp/secrets/agentic_core_key
+            agent_framework_key=/tmp/secrets/agent_framework_key
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Build and push extra images
         if: inputs.extra-images != '[]'
-        run: |
-          SECRETS_ARGS=""
-          [ -f /tmp/secrets/legato_common_key ] && SECRETS_ARGS="$SECRETS_ARGS --secret id=legato_common_key,src=/tmp/secrets/legato_common_key"
-          [ -f /tmp/secrets/agentic_core_key ] && SECRETS_ARGS="$SECRETS_ARGS --secret id=agentic_core_key,src=/tmp/secrets/agentic_core_key"
-          [ -f /tmp/secrets/agent_framework_key ] && SECRETS_ARGS="$SECRETS_ARGS --secret id=agent_framework_key,src=/tmp/secrets/agent_framework_key"
-
-          echo '${{ inputs.extra-images }}' | jq -c '.[]' | while read -r item; do
-            TARGET=$(echo "$item" | jq -r '.target')
-            REPO=$(echo "$item" | jq -r '.ecr_repository')
-            docker buildx build \
-              --target "$TARGET" \
-              --build-arg GITHUB_SHA=${{ github.sha }} \
-              -t "$ECR_REGISTRY/$REPO:${{ github.sha }}" \
-              -t "$ECR_REGISTRY/$REPO:latest" \
-              $SECRETS_ARGS \
-              --push \
-              --platform ${{ inputs.platform }} \
-              .
-          done
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const images = JSON.parse('${{ inputs.extra-images }}');
+            const { execSync } = require('child_process');
+            for (const img of images) {
+              console.log(`Building ${img.target} → ${img.ecr_repository}`);
+              execSync(`docker buildx build \
+                --target ${img.target} \
+                --build-arg GITHUB_SHA=${{ github.sha }} \
+                -t ${{ env.ECR_REGISTRY }}/${img.ecr_repository}:${{ github.sha }} \
+                -t ${{ env.ECR_REGISTRY }}/${img.ecr_repository}:latest \
+                --secret id=legato_common_key,src=/tmp/secrets/legato_common_key \
+                --secret id=agentic_core_key,src=/tmp/secrets/agentic_core_key \
+                --secret id=agent_framework_key,src=/tmp/secrets/agent_framework_key \
+                --push \
+                --platform ${{ inputs.platform }} \
+                .`, { stdio: 'inherit' });
+            }
 
       - name: Cleanup secrets
         if: always()
