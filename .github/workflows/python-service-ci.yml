@@ -30,35 +30,6 @@ jobs:
       - run: uv sync ${{ inputs.uv-sync-args }}
       - run: uv run ruff check .
 
-  test:
-    name: test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
-      - uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: |
-            ${{ secrets.LEGATO_COMMON_SSH_KEY }}
-            ${{ secrets.AGENTIC_CORE_DEPLOY_KEY }}
-            ${{ secrets.AGENT_FRAMEWORK_DEPLOY_KEY }}
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-      - run: uv sync ${{ inputs.uv-sync-args }}
-      - name: Run tests
-        run: |
-          set +e
-          uv run pytest -m "${{ inputs.pytest-markers }}" --maxfail=1 --disable-warnings
-          status=$?
-          if [ $status -eq 5 ]; then
-            echo "No tests collected. Skipping."
-            exit 0
-          fi
-          exit $status
-
   typecheck:
     name: typecheck
     runs-on: ubuntu-latest
@@ -90,7 +61,38 @@ jobs:
 
   review:
     name: review
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - run: echo "AI review step — configure Claude Code review action here"
+
+  test:
+    name: test
+    needs: [lint, typecheck]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: |
+            ${{ secrets.LEGATO_COMMON_SSH_KEY }}
+            ${{ secrets.AGENTIC_CORE_DEPLOY_KEY }}
+            ${{ secrets.AGENT_FRAMEWORK_DEPLOY_KEY }}
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      - run: uv sync ${{ inputs.uv-sync-args }}
+      - name: Run tests
+        run: |
+          set +e
+          uv run pytest -m "${{ inputs.pytest-markers }}" --maxfail=1 --disable-warnings
+          status=$?
+          if [ $status -eq 5 ]; then
+            echo "No tests collected. Skipping."
+            exit 0
+          fi
+          exit $status
