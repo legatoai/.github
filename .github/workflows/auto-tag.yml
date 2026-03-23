@@ -1,0 +1,59 @@
+name: Auto Tag
+
+on:
+  workflow_call:
+
+jobs:
+  tag:
+    name: tag
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Determine version bump and create tag
+        run: |
+          # Get latest tag
+          LATEST=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          MAJOR=$(echo "$LATEST" | sed 's/^v//' | cut -d. -f1)
+          MINOR=$(echo "$LATEST" | sed 's/^v//' | cut -d. -f2)
+          PATCH=$(echo "$LATEST" | sed 's/^v//' | cut -d. -f3)
+
+          # Read commit message (squash merge = PR title)
+          MSG=$(git log -1 --pretty=%s)
+          echo "Latest tag: $LATEST"
+          echo "Commit: $MSG"
+
+          # Determine bump
+          if [[ "$MSG" =~ ^[a-z]+\!: ]]; then
+            MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0
+            BUMP="major"
+          elif [[ "$MSG" =~ ^feat(\(.+\))?: ]]; then
+            MINOR=$((MINOR + 1)); PATCH=0
+            BUMP="minor"
+          elif [[ "$MSG" =~ ^fix(\(.+\))?: ]]; then
+            PATCH=$((PATCH + 1))
+            BUMP="patch"
+          else
+            echo "No release needed for: $MSG"
+            exit 0
+          fi
+
+          NEW_TAG="v${MAJOR}.${MINOR}.${PATCH}"
+          echo "Bump: $BUMP → $NEW_TAG"
+
+          # Create tag
+          git tag "$NEW_TAG"
+          git push origin "$NEW_TAG"
+
+          # Create GitHub Release
+          gh release create "$NEW_TAG" \
+            --title "$NEW_TAG" \
+            --notes "$MSG" \
+            --latest
+        env:
+          GH_TOKEN: ${{ github.token }}
