@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
+      - uses: astral-sh/setup-uv@v7
       - run: uvx ruff format --check .
 
   lint:
@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
+      - uses: astral-sh/setup-uv@v7
       - run: uvx ruff check .
 
   typecheck:
@@ -36,7 +36,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
+      - uses: astral-sh/setup-uv@v7
       - uses: webfactory/ssh-agent@v0.9.0
         if: github.actor != 'dependabot[bot]'
         with:
@@ -76,7 +76,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
+      - uses: astral-sh/setup-uv@v7
       - uses: webfactory/ssh-agent@v0.9.0
         if: github.actor != 'dependabot[bot]'
         with:
