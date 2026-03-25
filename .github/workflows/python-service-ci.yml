@@ -84,7 +84,7 @@ jobs:
             ${{ secrets.LEGATO_COMMON_SSH_KEY }}
             ${{ secrets.AGENTIC_CORE_DEPLOY_KEY }}
             ${{ secrets.AGENT_FRAMEWORK_DEPLOY_KEY }}
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v6
         if: github.actor != 'dependabot[bot]'
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
