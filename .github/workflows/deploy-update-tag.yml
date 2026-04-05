@@ -100,7 +100,8 @@ jobs:
         if: inputs.extra-images != '[]'
         run: |
           echo '${{ inputs.extra-images }}' | jq -c '.[]' | while read -r item; do
-            TARGET=$(echo "$item" | jq -r '.target')
+            TARGET=$(echo "$item" | jq -r '.target // empty')
+            TARGET_ARG="${TARGET:+--target $TARGET}"
             REPO=$(echo "$item" | jq -r '.ecr_repository')
             DOCKERFILE_PATH=$(echo "$item" | jq -r '.dockerfile // "./Dockerfile"')
             echo "Building $DOCKERFILE_PATH : target $TARGET → $REPO"
@@ -112,7 +113,7 @@ jobs:
 
             docker buildx build \
               -f "$DOCKERFILE_PATH" \
-              --target "$TARGET" \
+              $TARGET_ARG \
               --build-arg GITHUB_SHA=${{ github.sha }} \
               -t "${{ env.ECR_REGISTRY }}/$REPO:${{ github.sha }}" \
               -t "${{ env.ECR_REGISTRY }}/$REPO:latest" \
