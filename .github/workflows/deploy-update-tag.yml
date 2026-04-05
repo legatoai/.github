@@ -27,7 +27,7 @@ on:
         default: "ubuntu-24.04-arm"
         type: string
       extra-images:
-        description: "JSON array of extra images to build [{target, ecr_repository}]"
+        description: "JSON array of extra images to build [{dockerfile, target, ecr_repository}]"
         required: false
         default: "[]"
         type: string
@@ -102,7 +102,8 @@ jobs:
           echo '${{ inputs.extra-images }}' | jq -c '.[]' | while read -r item; do
             TARGET=$(echo "$item" | jq -r '.target')
             REPO=$(echo "$item" | jq -r '.ecr_repository')
-            echo "Building $TARGET → $REPO"
+            DOCKERFILE_PATH=${(echo "$item" | jq -r '.dockerfile'):-./Dockerfile}
+            echo "Building $DOCKERFILE_PATH : target $TARGET → $REPO"
 
             SECRETS_ARGS=""
             [ -f /tmp/secrets/legato_common_key ] && SECRETS_ARGS="$SECRETS_ARGS --secret id=legato_common_key,src=/tmp/secrets/legato_common_key"
@@ -110,6 +111,7 @@ jobs:
             [ -f /tmp/secrets/agent_framework_key ] && SECRETS_ARGS="$SECRETS_ARGS --secret id=agent_framework_key,src=/tmp/secrets/agent_framework_key"
 
             docker buildx build \
+              -f "$DOCKERFILE_PATH" \
               --target "$TARGET" \
               --build-arg GITHUB_SHA=${{ github.sha }} \
               -t "${{ env.ECR_REGISTRY }}/$REPO:${{ github.sha }}" \
