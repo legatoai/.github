@@ -102,7 +102,7 @@ jobs:
           echo '${{ inputs.extra-images }}' | jq -c '.[]' | while read -r item; do
             TARGET=$(echo "$item" | jq -r '.target')
             REPO=$(echo "$item" | jq -r '.ecr_repository')
-            DOCKERFILE_PATH=(echo "$item" | jq -r '.dockerfile // "./Dockerfile"')
+            DOCKERFILE_PATH=$(echo "$item" | jq -r '.dockerfile // "./Dockerfile"')
             echo "Building $DOCKERFILE_PATH : target $TARGET → $REPO"
 
             SECRETS_ARGS=""
