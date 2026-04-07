@@ -5,15 +5,59 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    groups:
+      pip-security:
+        applies-to: security-updates
+        patterns: ['*']
+      pip-minor-patch:
+        applies-to: version-updates
+        patterns: ['*']
+        update-types: [minor, patch]
+    labels:
+      - dependencies
+      - pip
   - package-ecosystem: npm
     directory: /
     schedule:
       interval: weekly
+    groups:
+      npm-security:
+        applies-to: security-updates
+        patterns: ['*']
+      npm-minor-patch:
+        applies-to: version-updates
+        patterns: ['*']
+        update-types: [minor, patch]
+    labels:
+      - dependencies
+      - npm
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    groups:
+      github-actions-security:
+        applies-to: security-updates
+        patterns: ['*']
+      github-actions-minor-patch:
+        applies-to: version-updates
+        patterns: ['*']
+        update-types: [minor, patch]
+    labels:
+      - dependencies
+      - github-actions
   - package-ecosystem: docker
     directory: /
     schedule:
       interval: weekly
+    groups:
+      docker-security:
+        applies-to: security-updates
+        patterns: ['*']
+      docker-minor-patch:
+        applies-to: version-updates
+        patterns: ['*']
+        update-types: [minor, patch]
+    labels:
+      - dependencies
+      - docker
