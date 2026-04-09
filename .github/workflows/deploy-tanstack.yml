@@ -1,0 +1,102 @@
+name: Deploy TanStack — Artifact Build, Push & Update Tag
+
+on:
+  workflow_call:
+    inputs:
+      chart-name:
+        description: "Helm chart name in helm-charts repo"
+        required: true
+        type: string
+      ecr-repository:
+        description: "ECR repository path (e.g. legatoai/playground-mvp)"
+        required: true
+        type: string
+      build-matrix:
+        description: "JSON array of build targets [{vendor, tenant, uuid}]"
+        required: true
+        type: string
+      platform:
+        description: "Docker build platform"
+        required: false
+        default: "linux/arm64"
+        type: string
+      runner:
+        description: "GitHub Actions runner label"
+        required: false
+        default: "ubuntu-24.04-arm"
+        type: string
+
+env:
+  ECR_REGISTRY: 977522846639.dkr.ecr.us-east-1.amazonaws.com
+
+jobs:
+  build-and-push:
+    name: build-push
+    runs-on: ${{ inputs.runner }}
+    strategy:
+      matrix:
+        include: ${{ fromJson(inputs.build-matrix) }}
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: build-output-${{ matrix.vendor }}-${{ matrix.tenant }}
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - uses: aws-actions/amazon-ecr-login@v2
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          platforms: ${{ inputs.platform }}
+          tags: |
+            ${{ env.ECR_REGISTRY }}/${{ inputs.ecr-repository }}:${{ github.sha }}-${{ matrix.vendor }}-${{ matrix.tenant }}
+            ${{ env.ECR_REGISTRY }}/${{ inputs.ecr-repository }}:latest-${{ matrix.vendor }}-${{ matrix.tenant }}
+          cache-from: type=gha,scope=docker-${{ matrix.vendor }}-${{ matrix.tenant }}
+          cache-to: type=gha,scope=docker-${{ matrix.vendor }}-${{ matrix.tenant }},mode=max
+
+  update-helm-tag:
+    name: update-tag
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    strategy:
+      matrix:
+        include: ${{ fromJson(inputs.build-matrix) }}
+    steps:
+      - name: Generate deploy bot token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.DEPLOY_BOT_APP_ID }}
+          private-key: ${{ secrets.DEPLOY_BOT_PRIVATE_KEY }}
+          owner: legatoai
+          repositories: helm-charts
+
+      - name: Clone helm-charts and update image tag
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          git clone https://x-access-token:${GH_TOKEN}@github.com/legatoai/helm-charts.git
+          cd helm-charts
+          git config user.name "legato-deploy-bot[bot]"
+          git config user.email "legato-deploy-bot[bot]@users.noreply.github.com"
+
+          CHART_DIR="charts/${{ inputs.chart-name }}"
+          VALUES_FILE="${CHART_DIR}/values.${{ matrix.vendor }}.yaml"
+          NEW_TAG="${{ github.sha }}-${{ matrix.vendor }}-${{ matrix.tenant }}"
+
+          if [ -f "$VALUES_FILE" ]; then
+            sed -i -E '/^image:/,/^[a-zA-Z]/ s/(^[[:space:]]+tag:[[:space:]]*)(&[a-zA-Z0-9_-]+[[:space:]]+)?(.*)$/\1\2"'"${NEW_TAG}"'"/' "$VALUES_FILE"
+            git add "$VALUES_FILE"
+            git commit -m "Update ${{ inputs.chart-name }} image tag for ${{ matrix.vendor }} to ${NEW_TAG}" || true
+            git push origin main
+          fi

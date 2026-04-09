@@ -2,55 +2,118 @@ name: TanStack CI
 
 on:
   workflow_call:
+    inputs:
+      build-matrix:
+        description: "JSON array of build targets [{vendor, tenant, uuid}]. Skips build if empty."
+        required: false
+        default: "[]"
+        type: string
+      prisma:
+        description: "Run prisma generate + vendor:generate before lint/build"
+        required: false
+        default: false
+        type: boolean
+      storybook:
+        description: "Run storybook build job"
+        required: false
+        default: true
+        type: boolean
 
 jobs:
   lint:
     name: lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
-      - run: npm ci
-      - run: npm run lint
-
-  test:
-    name: test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-      - run: npm ci
-      - run: npm test || echo "No tests configured"
-
-  typecheck:
-    name: typecheck
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-      - run: npm ci
-      - run: npx tsc --noEmit
+          node-version-file: ".node-version"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - name: Generate Prisma client
+        if: inputs.prisma
+        run: pnpm exec prisma generate
+      - name: Generate vendor Prisma client
+        if: inputs.prisma
+        run: pnpm vendor:generate
+      - name: Check spelling
+        run: pnpm lint:spelling:all
+      - name: Check type safety
+        run: pnpm typecheck
+      - name: Check linting
+        run: pnpm lint --max-warnings 0 .
+      - name: Check stylelint
+        run: pnpm lint:style --max-warnings 0 .
 
   build:
     name: build
-    runs-on: ubuntu-latest
+    if: inputs.build-matrix != '[]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        include: ${{ fromJson(inputs.build-matrix) }}
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
-      - run: npm ci
-      - run: npm run build
+          node-version-file: ".node-version"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - name: Generate Prisma client
+        if: inputs.prisma
+        run: pnpm exec prisma generate
+      - name: Generate vendor Prisma client
+        if: inputs.prisma
+        run: pnpm vendor:generate
+      - name: Build
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+          VITE_SITE_URL: https://${{ matrix.uuid }}.app.legato.ai
+        run: pnpm build
+      - name: Upload build artifact
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output-${{ matrix.vendor }}-${{ matrix.tenant }}
+          path: |
+            .output/
+            src/generated/prisma/
+            package.json
+            pnpm-lock.yaml
+            prisma/
+            prisma.config.ts
+            Dockerfile
+          include-hidden-files: true
+          retention-days: 1
+
+  storybook:
+    name: storybook
+    if: inputs.storybook
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".node-version"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - name: Generate Prisma client
+        if: inputs.prisma
+        run: pnpm exec prisma generate
+      - name: Generate vendor Prisma client
+        if: inputs.prisma
+        run: pnpm vendor:generate
+      - run: pnpm storybook:build
 
   security:
     name: security
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: aquasecurity/trivy-action@master
@@ -62,7 +125,8 @@ jobs:
 
   review:
     name: review
-    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - run: echo "AI review step — configure Claude Code review action here"
