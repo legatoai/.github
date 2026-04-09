@@ -15,7 +15,6 @@ jobs:
         id: maintainer
         run: |
           if [ -f .github/DEPENDABOT_MAINTAINER ]; then
-            # Strip leading @, whitespace, and empty lines
             maintainer=$(sed 's/^@//' .github/DEPENDABOT_MAINTAINER | tr -d '[:space:]')
             echo "value=${maintainer}" >> "$GITHUB_OUTPUT"
           else
@@ -26,19 +25,34 @@ jobs:
         id: metadata
         uses: dependabot/fetch-metadata@v2
         with:
-          alert-lookup: true
-          compat-lookup: true
           github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Lookup max alert severity for dependencies in this PR
+        id: severity
+        run: |
+          dep_names="${{ steps.metadata.outputs.dependency-names }}"
+          max_cvss=0
+
+          for dep in $(echo "$dep_names" | tr ',' '\n' | xargs); do
+            cvss=$(gh api "repos/${{ github.repository }}/dependabot/alerts" \
+              --jq "[.[] | select(.state==\"open\" and .security_vulnerability.package.name==\"$dep\")] | max_by(.security_advisory.cvss.score) | .security_advisory.cvss.score // 0" 2>/dev/null || echo "0")
+            echo "  $dep: CVSS $cvss"
+            if (( $(echo "$cvss > $max_cvss" | bc -l 2>/dev/null || echo 0) )); then
+              max_cvss=$cvss
+            fi
+          done
+
+          echo "max_cvss=$max_cvss" >> "$GITHUB_OUTPUT"
+          echo "Max CVSS across all deps: $max_cvss"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Assign maintainer
         run: |
           maintainer="${{ steps.maintainer.outputs.value }}"
           if [[ "$maintainer" == */* ]]; then
-            # Team slug (org/team) — request review from team
-            team_slug="${maintainer#*/}"
             gh pr edit "$PR_URL" --add-reviewer "$maintainer"
           else
-            # Individual user — assign
             gh pr edit "$PR_URL" --add-assignee "$maintainer" --add-reviewer "$maintainer"
           fi
         env:
@@ -56,16 +70,14 @@ jobs:
       - name: Label by severity
         run: |
           update_type="${{ steps.metadata.outputs.update-type }}"
-          cvss="${{ steps.metadata.outputs.cvss }}"
+          max_cvss="${{ steps.severity.outputs.max_cvss }}"
 
-          # Label based on update type
           if [[ "$update_type" == "version-update:semver-major" ]]; then
             gh pr edit "$PR_URL" --add-label "major-update"
           fi
 
-          # Label security PRs by CVSS severity
-          if [[ -n "$cvss" && "$cvss" != "0" ]]; then
-            cvss_int=${cvss%%.*}
+          if [[ -n "$max_cvss" && "$max_cvss" != "0" ]]; then
+            cvss_int=${max_cvss%%.*}
             if (( cvss_int >= 7 )); then
               gh pr edit "$PR_URL" --add-label "security-critical"
             else
@@ -79,20 +91,22 @@ jobs:
       - name: Auto-merge critical/high security + minor/patch version updates
         run: |
           update_type="${{ steps.metadata.outputs.update-type }}"
-          cvss="${{ steps.metadata.outputs.cvss }}"
+          max_cvss="${{ steps.severity.outputs.max_cvss }}"
 
           should_merge=false
 
           # Auto-merge critical/high security updates (CVSS >= 7.0)
-          if [[ -n "$cvss" && "$cvss" != "0" ]]; then
-            cvss_int=${cvss%%.*}
+          if [[ -n "$max_cvss" && "$max_cvss" != "0" ]]; then
+            cvss_int=${max_cvss%%.*}
             if (( cvss_int >= 7 )); then
               should_merge=true
-              echo "Auto-merging: critical/high security update (CVSS $cvss)"
+              echo "Auto-merging: critical/high security update (max CVSS $max_cvss)"
+            else
+              echo "Low/medium severity (max CVSS $max_cvss) — skipping auto-merge"
             fi
           fi
 
-          # Auto-merge minor/patch version updates
+          # Auto-merge minor/patch version updates (non-security)
           if [[ "$update_type" == "version-update:semver-minor" || "$update_type" == "version-update:semver-patch" ]]; then
             should_merge=true
             echo "Auto-merging: ${update_type} version update"
