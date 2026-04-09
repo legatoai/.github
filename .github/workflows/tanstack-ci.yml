@@ -47,7 +47,29 @@ jobs:
       - name: Check stylelint
         run: pnpm lint:style --max-warnings 0 .
 
-  build:
+  build-simple:
+    name: build
+    if: inputs.build-matrix == '[]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".node-version"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      - name: Generate Prisma client
+        if: inputs.prisma
+        run: pnpm exec prisma generate
+      - name: Generate vendor Prisma client
+        if: inputs.prisma
+        run: pnpm vendor:generate
+      - name: Build
+        run: pnpm build
+
+  build-matrix:
     name: build
     if: inputs.build-matrix != '[]'
     runs-on: ubuntu-24.04
@@ -89,6 +111,18 @@ jobs:
             Dockerfile
           include-hidden-files: true
           retention-days: 1
+
+  build-complete:
+    name: build-complete
+    if: always()
+    needs: [build-simple, build-matrix]
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          if [[ "${{ needs.build-simple.result }}" == "failure" || "${{ needs.build-matrix.result }}" == "failure" ]]; then
+            echo "Build failed"
+            exit 1
+          fi
 
   storybook:
     name: storybook
