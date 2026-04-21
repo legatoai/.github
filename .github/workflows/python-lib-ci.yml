@@ -36,6 +36,9 @@ jobs:
     runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
       - uses: astral-sh/setup-uv@v4
       - uses: webfactory/ssh-agent@v0.9.0
         if: github.actor != 'dependabot[bot]'
@@ -76,6 +79,9 @@ jobs:
     runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
       - uses: astral-sh/setup-uv@v4
       - uses: webfactory/ssh-agent@v0.9.0
         if: github.actor != 'dependabot[bot]'
