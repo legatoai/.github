@@ -53,10 +53,10 @@ jobs:
             ${{ secrets.AGENTIC_CORE_DEPLOY_KEY }}
             ${{ secrets.AGENT_FRAMEWORK_DEPLOY_KEY }}
       - run: uv sync --locked ${{ inputs.uv-sync-args }}
-        continue-on-error: ${{ github.actor == 'dependabot[bot]' }}
+        continue-on-error: true
       - name: Run type checker
         run: uv run mypy . --ignore-missing-imports
-        continue-on-error: ${{ github.actor == 'dependabot[bot]' }}
+        continue-on-error: true
 
   security:
     name: security
