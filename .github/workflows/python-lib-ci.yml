@@ -51,7 +51,7 @@ jobs:
         continue-on-error: ${{ github.actor == 'dependabot[bot]' }}
       - name: Run type checker
         run: uv run mypy . --ignore-missing-imports
-        continue-on-error: true
+        continue-on-error: ${{ github.actor == 'dependabot[bot]' }}
 
   security:
     name: security
