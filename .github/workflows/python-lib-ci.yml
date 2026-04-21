@@ -13,6 +13,11 @@ on:
         required: false
         default: ""
         type: string
+      trivy-skip-dirs:
+        description: "Comma-separated directories to exclude from Trivy scan (e.g. vendor,src/legacy)"
+        required: false
+        default: ""
+        type: string
 
 jobs:
   format:
@@ -58,12 +63,15 @@ jobs:
     runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
-      - uses: aquasecurity/trivy-action@master
+      - uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1  # v0.35.0
         with:
           scan-type: "fs"
           scan-ref: "."
-          severity: "CRITICAL,HIGH"
-          exit-code: "0"
+          severity: "CRITICAL"
+          exit-code: "1"
+          ignore-unfixed: true
+          skip-dirs: ${{ inputs.trivy-skip-dirs }}
+        continue-on-error: ${{ github.actor == 'dependabot[bot]' }}
 
   review:
     name: review
