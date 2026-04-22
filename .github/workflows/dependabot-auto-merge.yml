@@ -92,10 +92,21 @@ jobs:
         run: |
           update_type="${{ steps.metadata.outputs.update-type }}"
           max_cvss="${{ steps.severity.outputs.max_cvss }}"
+          branch="${{ github.event.pull_request.head.ref }}"
 
           should_merge=false
 
-          # Auto-merge critical/high security updates (CVSS >= 7.0)
+          # Grouped PRs: our dependabot.yml restricts both `*-security` and
+          # `*-minor-patch` groups to minor+patch updates only. Majors always
+          # come as individual PRs. So matching the group branch shape is safe
+          # even when fetch-metadata returns null update-type (upstream
+          # dependabot/fetch-metadata#339, #499 for grouped security updates).
+          if [[ "$branch" =~ ^dependabot/.+/(.+-security-.+|.+-minor-patch-.+)$ ]]; then
+            should_merge=true
+            echo "Auto-merging: grouped update on $branch"
+          fi
+
+          # Auto-merge critical/high security updates (CVSS >= 7.0) — single-dep
           if [[ -n "$max_cvss" && "$max_cvss" != "0" ]]; then
             cvss_int=${max_cvss%%.*}
             if (( cvss_int >= 7 )); then
@@ -106,7 +117,7 @@ jobs:
             fi
           fi
 
-          # Auto-merge minor/patch version updates (non-security)
+          # Auto-merge minor/patch version updates (non-security, single-dep)
           if [[ "$update_type" == "version-update:semver-minor" || "$update_type" == "version-update:semver-patch" ]]; then
             should_merge=true
             echo "Auto-merging: ${update_type} version update"
