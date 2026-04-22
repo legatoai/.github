@@ -45,7 +45,7 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
       - uses: astral-sh/setup-uv@v4
-      - uses: webfactory/ssh-agent@v0.9.0
+      - uses: webfactory/ssh-agent@v0.10.0
         if: github.actor != 'dependabot[bot]'
         with:
           ssh-private-key: |
@@ -91,7 +91,7 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
       - uses: astral-sh/setup-uv@v4
-      - uses: webfactory/ssh-agent@v0.9.0
+      - uses: webfactory/ssh-agent@v0.10.0
         if: github.actor != 'dependabot[bot]'
         with:
           ssh-private-key: |
