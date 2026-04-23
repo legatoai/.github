@@ -59,34 +59,8 @@ jobs:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Ensure labels exist
-        run: |
-          for label in security-critical security-low major-update; do
-            gh label create "$label" --force 2>/dev/null || true
-          done
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Label by severity
-        run: |
-          update_type="${{ steps.metadata.outputs.update-type }}"
-          max_cvss="${{ steps.severity.outputs.max_cvss }}"
-
-          if [[ "$update_type" == "version-update:semver-major" ]]; then
-            gh pr edit "$PR_URL" --add-label "major-update"
-          fi
-
-          if [[ -n "$max_cvss" && "$max_cvss" != "0" ]]; then
-            cvss_int=${max_cvss%%.*}
-            if (( cvss_int >= 7 )); then
-              gh pr edit "$PR_URL" --add-label "security-critical"
-            else
-              gh pr edit "$PR_URL" --add-label "security-low"
-            fi
-          fi
-        env:
-          PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Labeling lives in `dependabot-label.yml` (runs on `pull_request_target`
+      # so it survives dirty PRs that never fire `pull_request` workflows).
 
       - name: Auto-merge critical/high security + minor/patch version updates
         run: |
