@@ -1,0 +1,74 @@
+name: Dependabot Label
+
+# Decoupled from CI on purpose. Callers use `pull_request_target`, which fires
+# against the base branch and runs even when the PR is unmergeable (concurrent
+# lockfile bumps → dirty state → no merge ref → no `pull_request` dispatch).
+# Without this path the `major-update` / `security-critical` / `security-low`
+# labels never land on ghost PRs (see infrastructure/CLAUDE.md §Dependabot).
+on:
+  workflow_call:
+
+jobs:
+  label:
+    name: label
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      pull-requests: write
+      security-events: read
+    steps:
+      - name: Fetch Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Lookup max alert severity for dependencies in this PR
+        id: severity
+        run: |
+          dep_names="${{ steps.metadata.outputs.dependency-names }}"
+          max_cvss=0
+
+          for dep in $(echo "$dep_names" | tr ',' '\n' | xargs); do
+            cvss=$(gh api "repos/${{ github.repository }}/dependabot/alerts" \
+              --jq "[.[] | select(.state==\"open\" and .security_vulnerability.package.name==\"$dep\")] | max_by(.security_advisory.cvss.score) | .security_advisory.cvss.score // 0" 2>/dev/null || echo "0")
+            echo "  $dep: CVSS $cvss"
+            if (( $(echo "$cvss > $max_cvss" | bc -l 2>/dev/null || echo 0) )); then
+              max_cvss=$cvss
+            fi
+          done
+
+          echo "max_cvss=$max_cvss" >> "$GITHUB_OUTPUT"
+          echo "Max CVSS across all deps: $max_cvss"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Ensure labels exist
+        run: |
+          for label in security-critical security-low major-update; do
+            gh label create "$label" --force 2>/dev/null || true
+          done
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Apply labels
+        run: |
+          update_type="${{ steps.metadata.outputs.update-type }}"
+          max_cvss="${{ steps.severity.outputs.max_cvss }}"
+
+          if [[ "$update_type" == "version-update:semver-major" ]]; then
+            gh pr edit "$PR_URL" --add-label "major-update"
+          fi
+
+          if [[ -n "$max_cvss" && "$max_cvss" != "0" ]]; then
+            cvss_int=${max_cvss%%.*}
+            if (( cvss_int >= 7 )); then
+              gh pr edit "$PR_URL" --add-label "security-critical"
+            else
+              gh pr edit "$PR_URL" --add-label "security-low"
+            fi
+          fi
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
