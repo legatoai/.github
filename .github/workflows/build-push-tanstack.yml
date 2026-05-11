@@ -1,0 +1,61 @@
+name: Build & Push TanStack (Multi-Tenant)
+
+on:
+  workflow_call:
+    inputs:
+      ecr-repository:
+        description: "ECR repository path (e.g. legatoai/playground-mvp)"
+        required: true
+        type: string
+      build-matrix:
+        description: "JSON array of build targets [{vendor, tenant, uuid}]"
+        required: true
+        type: string
+      platform:
+        description: "Docker build platform"
+        required: false
+        default: "linux/arm64"
+        type: string
+      runner:
+        description: "GitHub Actions runner label"
+        required: false
+        default: "ubuntu-24.04-arm"
+        type: string
+
+env:
+  ECR_REGISTRY: 977522846639.dkr.ecr.us-east-1.amazonaws.com
+
+jobs:
+  build-and-push:
+    name: build-push
+    runs-on: ${{ inputs.runner }}
+    strategy:
+      matrix:
+        include: ${{ fromJson(inputs.build-matrix) }}
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: build-output-${{ matrix.vendor }}-${{ matrix.tenant }}
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - uses: aws-actions/amazon-ecr-login@v2
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          platforms: ${{ inputs.platform }}
+          tags: |
+            ${{ env.ECR_REGISTRY }}/${{ inputs.ecr-repository }}:${{ github.sha }}-${{ matrix.vendor }}-${{ matrix.tenant }}
+            ${{ env.ECR_REGISTRY }}/${{ inputs.ecr-repository }}:latest-${{ matrix.vendor }}-${{ matrix.tenant }}
+          cache-from: type=gha,scope=docker-${{ matrix.vendor }}-${{ matrix.tenant }}
+          cache-to: type=gha,scope=docker-${{ matrix.vendor }}-${{ matrix.tenant }},mode=max
