@@ -1,4 +1,8 @@
-name: Deploy TanStack — Artifact Build, Push & Update Tag
+# ⚠️ DEPRECATED — Use build-push-tanstack.yml instead.
+# Image tag updates are now handled by ArgoCD Image Updater (polls ECR directly).
+# This workflow remains for backward compatibility only. Do not use in new repos.
+# See: https://github.com/legatoai/helm-charts/pull/95
+name: "[DEPRECATED] Deploy TanStack — Artifact Build, Push & Update Tag"
 
 on:
   workflow_call:
