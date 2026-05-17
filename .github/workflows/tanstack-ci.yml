@@ -112,7 +112,7 @@ jobs:
             package.json
             pnpm-lock.yaml
             prisma/
-            prisma.config.ts
+            prisma*.config.ts
             Dockerfile
           include-hidden-files: true
           retention-days: 1
